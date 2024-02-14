@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"sync"
 	"vrpc/codec"
 )
@@ -173,6 +175,28 @@ func NewClient(conn net.Conn, opt *codec.Option) (*Client, error) {
 	}
 
 	return newClientCodec(f(conn), opt), nil
+}
+
+const (
+	connected        = "200 Connected to Gee RPC"
+	defaultRPCPath   = "/_geeprc_"
+	defaultDebugPath = "/debug/geerpc"
+)
+
+// NewHTTPClient new a Client instance via HTTP as transport protocol
+func NewHTTPClient(conn net.Conn, opt *codec.Option) (*Client, error) {
+	_, _ = io.WriteString(conn, fmt.Sprintf("CONNECT %s HTTP/1.0\n\n", defaultRPCPath))
+
+	// Require successful HTTP response
+	// before switching to RPC protocol.
+	resp, err := http.ReadResponse(bufio.NewReader(conn), &http.Request{Method: "CONNECT"})
+	if err == nil && resp.Status == connected {
+		return NewClient(conn, opt)
+	}
+	if err == nil {
+		err = errors.New("unexpected HTTP response: " + resp.Status)
+	}
+	return nil, err
 }
 
 func newClientCodec(cc codec.Codec, opt *codec.Option) *Client {

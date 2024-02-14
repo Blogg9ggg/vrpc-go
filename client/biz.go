@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"time"
 	"vrpc/codec"
 )
@@ -33,6 +34,31 @@ func parseOptions(opts ...*codec.Option) (*codec.Option, error) {
 // Dial connects to an RPC server at the specified network address
 func Dial(network, address string, opts ...*codec.Option) (client *Client, err error) {
 	return dialTimeout(NewClient, network, address, opts...)
+}
+
+// DialHTTP connects to an HTTP RPC server at the specified network address
+// listening on the default HTTP RPC path.
+func DialHTTP(network, address string, opts ...*codec.Option) (*Client, error) {
+	return dialTimeout(NewHTTPClient, network, address, opts...)
+}
+
+// XDial calls different functions to connect to a RPC server
+// according the first parameter rpcAddr.
+// rpcAddr is a general format (protocol@addr) to represent a rpc server
+// eg, http@10.0.0.1:7001, tcp@10.0.0.1:9999, unix@/tmp/geerpc.sock
+func XDial(rpcAddr string, opts ...*codec.Option) (*Client, error) {
+	parts := strings.Split(rpcAddr, "@")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("rpc client err: wrong format '%s', expect protocol@addr", rpcAddr)
+	}
+	protocol, addr := parts[0], parts[1]
+	switch protocol {
+	case "http":
+		return DialHTTP("tcp", addr, opts...)
+	default:
+		// tcp, unix or other transport protocol
+		return Dial(protocol, addr, opts...)
+	}
 }
 
 type newClientFunc func(conn net.Conn, opt *codec.Option) (client *Client, err error)

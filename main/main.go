@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 	"vrpc/client"
@@ -136,6 +137,46 @@ func day3() {
 	}
 }
 
+func startServer5(addr chan string) {
+	var foo Foo
+	_ = server.Register(&foo)
+	server.HandleHTTP()
+
+	l, _ := net.Listen("tcp", ":9999")
+	addr <- l.Addr().String()
+	_ = http.Serve(l, nil)
+}
+
+func call5(addrCh chan string) {
+	client, _ := client.DialHTTP("tcp", <-addrCh)
+	defer func() { _ = client.Close() }()
+
+	time.Sleep(time.Second)
+	// send request & receive response
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			args := Args{Num1: i, Num2: i * i}
+			var reply int
+			ctx, _ := context.WithTimeout(context.Background(), time.Second)
+			if err := client.Call(ctx, "Foo.Sum", args, &reply); err != nil {
+				log.Fatal("call Foo.Sum error:", err)
+			}
+			log.Printf("%d + %d = %d", args.Num1, args.Num2, reply)
+		}(i)
+	}
+	wg.Wait()
+}
+
+func day5() {
+	log.SetFlags(0)
+	ch := make(chan string)
+	go call5(ch)
+	startServer5(ch)
+}
+
 func main() {
-	day3()
+	day5()
 }
